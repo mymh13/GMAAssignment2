@@ -1,4 +1,4 @@
-# Define the env file path (different for local and production)
+# Define the env file path (dynamically for local and production)
 # Resolve absolute path for ENV_FILE
 if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
@@ -7,16 +7,16 @@ elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
 elif [ -f "$HOME/AppData/Local/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="$HOME/AppData/Local/OutdoorsyCloudyMvc/.env"
 else
-    echo "❌ No .env file found!"
+    echo "No .env file found!"
     exit 1
 fi
 
 # Debugging: Print the exact file path before trying to use it
-echo "✅ Using .env file from: $ENV_FILE"
+echo "Using .env file from: $ENV_FILE"
 
 # Ensure the file actually exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo "❌ ERROR: .env file not found at expected path!"
+    echo "ERROR: .env file not found at expected path!"
     exit 1
 fi
 

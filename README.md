@@ -13,5 +13,5 @@ https://github.com/mymh13
 
 ### Important files
 
-- 00.README.md : this file! Includes the basic instructions
-- All the numbered files (01., 02., et c. are primarily .sh format for presentational purposes, they could be .md or anything but I wanted the styling that comes with the script format). Their purpose is to present the code templates that is used in the final .pdf. During development I have been commented in/out code in those files to "partially script" sections.
+- README.md : this file! Includes the basic instructions
+- /Docs/ All the numbered files (01., 02., et c. are primarily .sh format for presentational purposes, they could be .md or anything but I wanted the styling that comes with the script format). Their purpose is to present the code templates that is used in the final .pdf. During development I have been commented in/out code in those files to "partially script" sections.

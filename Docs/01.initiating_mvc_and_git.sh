@@ -1,3 +1,5 @@
+#!/bin/bash
+
 ## Create a new project folder and navigate into it
 mkdir YourProjectFolderName && cd YourProjectFolderName
 

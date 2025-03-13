@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Define the env file path (dynamically for local and production)
 # Resolve absolute path for ENV_FILE
 if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then

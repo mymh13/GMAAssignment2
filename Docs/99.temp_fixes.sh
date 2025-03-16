@@ -29,3 +29,11 @@ set +o allexport
 
 # Temporory code is run below,
 # Example:removing rules that are not needed, testing code, manual adjustments etc
+
+# Setting Azure CLI to use the latest version of Python, I had two installed!
+az config set core.python-location="C:\\Python313\\python.exe"
+az config get core.python-location
+/c/Python313/python.exe -m pip --version
+python --version
+python -m pip --version
+a- extension add -n bastion --yes

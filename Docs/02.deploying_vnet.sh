@@ -27,12 +27,6 @@ set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-# Debug: Print variables to confirm they are loaded
-echo "Loaded environment variables:"
-echo "RESOURCE_GROUP=$RESOURCE_GROUP"
-echo "LOCATION=$LOCATION"
-echo "VNET_NAME=$VNET_NAME"
-
 # Create the resource group if it does not exist
 az group create --name $RESOURCE_GROUP --location $LOCATION
 

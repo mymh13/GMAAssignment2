@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Define the env file path (dynamically for local and production)
-# Resolve absolute path for ENV_FILE
+# Load environment variables
 if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
 elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
@@ -16,13 +15,13 @@ fi
 # Debugging: Print the exact file path before trying to use it
 echo "Using .env file from: $ENV_FILE"
 
-# Ensure the file actually exists
+# Ensure the file exists
 if [ ! -f "$ENV_FILE" ]; then
-    echo "ERROR: .env file not found at expected path!"
+    echo "ERROR: .env file not found!"
     exit 1
 fi
 
-# Load environment variables properly, this makes sure we don't get an extra set of citation marks
+# Load environment variables properly
 set -o allexport
 source "$ENV_FILE"
 set +o allexport
@@ -50,12 +49,12 @@ az network vnet subnet create \
   --name DBSubnet \
   --address-prefixes 10.0.2.0/24
 
-# Create the Bastion Subnet (Required size: /27)
+# Create the Bastion VM Subnet (Renamed from AzureBastionSubnet)
 az network vnet subnet create \
   --resource-group $RESOURCE_GROUP \
   --vnet-name $VNET_NAME \
-  --name AzureBastionSubnet \
-  --address-prefixes 10.0.3.0/27
+  --name BastionVMSubnet \
+  --address-prefixes 10.0.3.0/24
 
 # Print the VNet list to confirm the creation
 echo "Running: az network vnet list --resource-group $RESOURCE_GROUP --output table"

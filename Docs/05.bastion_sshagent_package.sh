@@ -62,9 +62,8 @@ echo "BASTION_NSG: $BASTION_NSG"
 echo "SSH_CONFIG: $SSH_CONFIG"
 
 # Enable dynamic extension installation
-az config set extension.use_dynamic_install=yes_without_prompt
-# Make sure the extension is installed
-# az extension add --name azure-bastion --yes
+# az config set extension.use_dynamic_install=yes_without_prompt
+az config set extension.use_dynamic_install=no
 
 echo "Deploying Azure Bastion..."
 

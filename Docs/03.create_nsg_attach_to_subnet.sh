@@ -5,8 +5,7 @@ export PYTHONIOENCODING=UTF-8
 export LANG=en_US.UTF-8
 export LC_ALL=C.UTF-8
 
-# Define the env file path (dynamically for local and production)
-# Resolve absolute path for ENV_FILE
+# Define the env file path
 if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
 elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
@@ -18,30 +17,21 @@ else
     exit 1
 fi
 
-# Debugging: Print the exact file path before trying to use it
-echo "Using .env file from: $ENV_FILE"
-
-# Ensure the file actually exists
-if [ ! -f "$ENV_FILE" ]; then
-    echo "ERROR: .env file not found at expected path!"
-    exit 1
-fi
-
-# Load environment variables properly, this makes sure we don't get an extra set of citation marks
+# Load environment variables
 set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-# Debug: Print variables to confirm they are loaded
+# Debugging: Print variables to confirm they are loaded
 echo "Loaded environment variables:"
 echo "WEB_NSG=$WEB_NSG"
 echo "DB_NSG=$DB_NSG"
-echo "BASTION_NSG=$BASTION_NSG"
+echo "BASTION_VM_NSG=$BASTION_VM_NSG"
 
 # Create NSGs if they don't exist
 az network nsg create --resource-group $RESOURCE_GROUP --name $WEB_NSG --location $LOCATION
 az network nsg create --resource-group $RESOURCE_GROUP --name $DB_NSG --location $LOCATION
-az network nsg create --resource-group $RESOURCE_GROUP --name $BASTION_NSG --location $LOCATION
+az network nsg create --resource-group $RESOURCE_GROUP --name $BASTION_VM_NSG --location $LOCATION
 
 # Attach NSGs to corresponding subnets
 az network vnet subnet update \
@@ -56,12 +46,20 @@ az network vnet subnet update \
     --name DBSubnet \
     --network-security-group $DB_NSG
 
-# Function to check if a rule exists
+az network vnet subnet update \
+    --resource-group $RESOURCE_GROUP \
+    --vnet-name $VNET_NAME \
+    --name BastionVMSubnet \
+    --network-security-group $BASTION_VM_NSG
+
+# Function to check if an NSG rule exists
 rule_exists() {
     az network nsg rule list --resource-group "$RESOURCE_GROUP" --nsg-name "$1" --query "[?name=='$2']" --output json | jq -e 'length > 0' > /dev/null 2>&1
 }
 
 # Create NSG rules only if they don't exist
+
+# Allow SSH from your IP to Web NSG
 if ! rule_exists "$WEB_NSG" "AllowSSH"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
@@ -70,9 +68,10 @@ if ! rule_exists "$WEB_NSG" "AllowSSH"; then
         --protocol Tcp \
         --priority 100 \
         --destination-port-ranges 22 \
-        --access Allow --direction Inbound --source-address-prefixes Internet
+        --access Allow --direction Inbound --source-address-prefixes $(curl -s ifconfig.me)/32
 fi
 
+# Allow HTTP & HTTPS to Web NSG
 if ! rule_exists "$WEB_NSG" "AllowHTTP"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
@@ -81,7 +80,7 @@ if ! rule_exists "$WEB_NSG" "AllowHTTP"; then
         --protocol Tcp \
         --priority 200 \
         --destination-port-ranges 80 \
-        --access Allow --direction Inbound
+        --access Allow --direction Inbound --source-address-prefixes Internet
 fi
 
 if ! rule_exists "$WEB_NSG" "AllowHTTPS"; then
@@ -92,9 +91,10 @@ if ! rule_exists "$WEB_NSG" "AllowHTTPS"; then
         --protocol Tcp \
         --priority 300 \
         --destination-port-ranges 443 \
-        --access Allow --direction Inbound
+        --access Allow --direction Inbound --source-address-prefixes Internet
 fi
 
+# Allow MongoDB access from Web VM only
 if ! rule_exists "$DB_NSG" "AllowMongoDB"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
@@ -102,52 +102,39 @@ if ! rule_exists "$DB_NSG" "AllowMongoDB"; then
         --name AllowMongoDB \
         --protocol Tcp \
         --priority 100 \
-        --destination-port-ranges 27017 --access Allow --direction Inbound --source-address-prefix 10.0.1.0/24
+        --destination-port-ranges 27017 \
+        --access Allow --direction Inbound --source-address-prefixes 10.0.1.0/24
 fi
 
-if ! rule_exists "$BASTION_NSG" "AllowBastionInbound"; then
+# Bastion VM NSG: Allow SSH access to the Bastion VM from your IP
+if ! rule_exists "$BASTION_VM_NSG" "AllowBastionSSH"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_NSG \
-        --name AllowBastionInbound \
+        --nsg-name $BASTION_VM_NSG \
+        --name AllowBastionSSH \
         --protocol Tcp \
         --priority 100 \
-        --destination-port-ranges 443 \
-        --access Allow --direction Inbound --source-address-prefix Internet
+        --destination-port-ranges 22 \
+        --access Allow --direction Inbound --source-address-prefixes $(curl -s ifconfig.me)/32
 fi
 
-if ! rule_exists "$BASTION_NSG" "AllowBastionOutbound"; then
+# Bastion VM NSG: Allow internal VNet communication
+if ! rule_exists "$BASTION_VM_NSG" "AllowVNetCommunication"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_NSG \
-        --name AllowBastionOutbound \
-        --protocol Tcp \
-        --priority 200 \
-        --destination-port-ranges 443 --access Allow --direction Outbound --source-address-prefix "*"
-fi
-
-if ! rule_exists "$BASTION_NSG" "AllowAzureInfrastructure"; then
-    az network nsg rule create \
-        --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_NSG \
-        --name AllowAzureInfrastructure \
-        --protocol "*" \
-        --priority 300 \
-        --direction Inbound --access Allow --source-address-prefix AzureCloud --destination-port-ranges "*" --destination-address-prefix "*"
-fi
-
-if ! rule_exists "$BASTION_NSG" "AllowVNetCommunication"; then
-    az network nsg rule create \
-        --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_NSG \
+        --nsg-name $BASTION_VM_NSG \
         --name AllowVNetCommunication \
         --protocol "*" \
-        --priority 400 \
-        --direction Inbound --access Allow --source-address-prefix VirtualNetwork --destination-port-ranges "*" --destination-address-prefix "*"
+        --priority 200 \
+        --direction Inbound \
+        --access Allow \
+        --source-address-prefix VirtualNetwork \
+        --destination-port-ranges "*" \
+        --destination-address-prefix "*"
 fi
 
 # List NSGs and rules to verify the configuration
 az network nsg list --resource-group $RESOURCE_GROUP --output table
 az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $WEB_NSG --output table
 az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $DB_NSG --output table
-az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $BASTION_NSG --output table
+az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $BASTION_VM_NSG --output table

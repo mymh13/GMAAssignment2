@@ -61,8 +61,27 @@ az vm create \
   --no-wait \
   --output table
 
-# Verify the VMs were created successfully
-az vm list --resource-group $RESOURCE_GROUP --show-details --output table
+# Ensure a Public IP exists for the Bastion VM
+az network public-ip create \
+  --resource-group $RESOURCE_GROUP \
+  --name $BASTION_VM_PUBLIC_IP \
+  --sku Standard \
+  --allocation-method Static
+
+# Deploy the Bastion VM (acting as a jump host)
+az vm create \
+  --resource-group $RESOURCE_GROUP \
+  --name $BASTION_VM_NAME \
+  --image $VM_IMAGE \
+  --admin-username $VM_ADMIN_USER \
+  --size $VM_SIZE \
+  --authentication-type ssh \
+  --ssh-key-values $SSH_KEY_PATH \
+  --vnet-name $VNET_NAME \
+  --subnet $BASTION_VM_SUBNET \
+  --public-ip-address $BASTION_VM_PUBLIC_IP \
+  --nsg $BASTION_VM_NSG \
+  --output table
 
 # Fetch the Web VM's Public IP - using a different approach
 echo "Fetching Web VM IP address..."
@@ -70,11 +89,11 @@ WEB_VM_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $W
 echo "Web VM IP Found: $WEB_VM_IP"
 
 # Only try to fetch Bastion IP if BASTION_PUBLIC_IP is defined
-if [ -n "$BASTION_PUBLIC_IP" ]; then
+if [ -n "$BASTION_VM_PUBLIC_IP" ]; then
     echo "Fetching Bastion IP address..."
     # Check if the Bastion public IP resource exists
-    if az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_PUBLIC_IP &>/dev/null; then
-        BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_PUBLIC_IP --query ipAddress -o tsv)
+    if az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP &>/dev/null; then
+        BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP --query ipAddress -o tsv)
         echo "Bastion IP Found: $BASTION_IP"
     else
         echo "Bastion public IP resource not found. It will be created in script 05."
@@ -116,3 +135,11 @@ elif [ -n "$BASTION_PUBLIC_IP" ]; then
 else
     echo "Skipping storing Bastion IP as it was not fetched"
 fi
+
+# Verify: List all VMs in the resource group
+az vm list --resource-group $RESOURCE_GROUP --show-details --output table
+# Verify: List the public IP of the Bastion VM
+az network public-ip show \
+  --resource-group $RESOURCE_GROUP \
+  --name $BASTION_VM_PUBLIC_IP \
+  --query ipAddress -o tsv

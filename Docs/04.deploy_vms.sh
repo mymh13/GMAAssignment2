@@ -1,145 +1,73 @@
 #!/bin/bash
 
-# Define the env file path (dynamically for local and production)
-# Resolve absolute path for ENV_FILE
+# Load environment variables
 if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
 elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
     ENV_FILE="$HOME/.config/OutdoorsyCloudyMvc/.env"
 elif [ -f "$HOME/AppData/Local/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="$HOME/AppData/Local/OutdoorsyCloudyMvc/.env"
-else
     echo "No .env file found!"
     exit 1
 fi
 
-# Debugging: Print the exact file path before trying to use it
-echo "Using .env file from: $ENV_FILE"
-
-# Ensure the file actually exists
-if [ ! -f "$ENV_FILE" ]; then
-    echo "ERROR: .env file not found at expected path!"
-    exit 1
-fi
-
-# Load environment variables properly, this makes sure we don't get an extra set of citation marks
 set -o allexport
 source "$ENV_FILE"
 set +o allexport
 
-# Ensure a Public IP exists for the Web VM
-az network public-ip create --resource-group $RESOURCE_GROUP --name $WEB_VM_PUBLIC_IP --sku Standard --allocation-method Static
+# **Ensure SSH-Agent is clean**
+echo "Stopping any existing SSH-Agents..."
+for pid in $(ps | grep ssh-agent | awk '{print $1}'); do 
+    kill -9 $pid 2>/dev/null
+done
 
-# Deploy the Web VM
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $WEB_VM_NAME \
-  --image $VM_IMAGE \
-  --admin-username $VM_ADMIN_USER \
-  --size $VM_SIZE \
-  --authentication-type ssh \
-  --ssh-key-values $SSH_KEY_PATH \
-  --vnet-name $VNET_NAME \
-  --subnet $WEB_SUBNET \
-  --public-ip-address $WEB_VM_PUBLIC_IP \
-  --nsg $WEB_NSG \
-  --output table
+# **Remove old SSH sockets**
+find /tmp -type s -name "ssh-*" -exec rm -f {} \;
 
-# Deploy the DB VM
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $DB_VM_NAME \
-  --image $VM_IMAGE \
-  --admin-username $VM_ADMIN_USER \
-  --size $VM_SIZE \
-  --authentication-type ssh \
-  --ssh-key-values $SSH_KEY_PATH \
-  --vnet-name $VNET_NAME \
-  --subnet $DB_SUBNET \
-  --public-ip-address "" \
-  --nsg $DB_NSG \
-  --no-wait \
-  --output table
+# **Start a clean SSH-Agent session**
+echo "Starting a new SSH-Agent..."
+eval "$(ssh-agent -s)"
+echo "export SSH_AUTH_SOCK=$SSH_AUTH_SOCK" > ~/.ssh/ssh-agent.env
+echo "export SSH_AGENT_PID=$SSH_AGENT_PID" >> ~/.ssh/ssh-agent.env
+source ~/.ssh/ssh-agent.env
 
-# Ensure a Public IP exists for the Bastion VM
-az network public-ip create \
-  --resource-group $RESOURCE_GROUP \
-  --name $BASTION_VM_PUBLIC_IP \
-  --sku Standard \
-  --allocation-method Static
-
-# Deploy the Bastion VM (acting as a jump host)
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $BASTION_VM_NAME \
-  --image $VM_IMAGE \
-  --admin-username $VM_ADMIN_USER \
-  --size $VM_SIZE \
-  --authentication-type ssh \
-  --ssh-key-values $SSH_KEY_PATH \
-  --vnet-name $VNET_NAME \
-  --subnet $BASTION_VM_SUBNET \
-  --public-ip-address $BASTION_VM_PUBLIC_IP \
-  --nsg $BASTION_VM_NSG \
-  --output table
-
-# Fetch the Web VM's Public IP - using a different approach
-echo "Fetching Web VM IP address..."
-WEB_VM_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $WEB_VM_PUBLIC_IP --query ipAddress -o tsv)
-echo "Web VM IP Found: $WEB_VM_IP"
-
-# Only try to fetch Bastion IP if BASTION_PUBLIC_IP is defined
-if [ -n "$BASTION_VM_PUBLIC_IP" ]; then
-    echo "Fetching Bastion IP address..."
-    # Check if the Bastion public IP resource exists
-    if az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP &>/dev/null; then
-        BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP --query ipAddress -o tsv)
-        echo "Bastion IP Found: $BASTION_IP"
-    else
-        echo "Bastion public IP resource not found. It will be created in script 05."
-        BASTION_IP=""
-    fi
-else
-    echo "Skipping Bastion IP lookup as BASTION_PUBLIC_IP is not defined"
-    BASTION_IP=""
+# **Ensure SSH_AUTH_SOCK is valid**
+if [[ ! -S "$SSH_AUTH_SOCK" ]]; then
+    echo "ERROR: SSH_AUTH_SOCK is invalid!"
+    exit 1
 fi
 
-# Store the IPs in the .env file for reuse
-if [ -n "$WEB_VM_IP" ]; then
-    # Check if WEB_VM_IP already exists in the .env file
-    if grep -q "^WEB_VM_IP=" "$ENV_FILE"; then
-        # Replace the existing line
-        sed -i "/^WEB_VM_IP=/c\WEB_VM_IP=$WEB_VM_IP" "$ENV_FILE"
-    else
-        # Add a new line
-        echo "WEB_VM_IP=$WEB_VM_IP" >> "$ENV_FILE"
-    fi
-    echo "Stored Web VM IP: $WEB_VM_IP"
-else
-    echo "ERROR: Web VM IP not found!"
+# **Set Correct Private Key Path**
+PRIVATE_KEY="$HOME/.ssh/id_ed25519"
+
+# **Ensure SSH key permissions are correct**
+echo "Setting SSH key permissions..."
+chmod 600 "$PRIVATE_KEY"
+chmod 600 "${PRIVATE_KEY}.pub"
+
+# **Ensure SSH-Agent is running**
+if ! ps aux | grep -q "[s]sh-agent"; then
+    echo "ERROR: SSH-Agent is not running!"
+    exit 1
 fi
 
-# Only try to store Bastion IP if we attempted to fetch it and found it
-if [ -n "$BASTION_PUBLIC_IP" ] && [ -n "$BASTION_IP" ]; then
-    # Check if BASTION_IP already exists in the .env file
-    if grep -q "^BASTION_IP=" "$ENV_FILE"; then
-        # Replace the existing line
-        sed -i "/^BASTION_IP=/c\BASTION_IP=$BASTION_IP" "$ENV_FILE"
-    else
-        # Add a new line
-        echo "BASTION_IP=$BASTION_IP" >> "$ENV_FILE"
-    fi
-    echo "Stored Bastion IP: $BASTION_IP"
-elif [ -n "$BASTION_PUBLIC_IP" ]; then
-    echo "WARNING: Bastion IP not found, but continuing anyway"
-else
-    echo "Skipping storing Bastion IP as it was not fetched"
+# **Add SSH key to agent**
+echo "Adding SSH key to agent..."
+ssh-add "$PRIVATE_KEY"
+
+# **Confirm key is actually added**
+if ! ssh-add -l | grep -q "$(ssh-keygen -lf "$PRIVATE_KEY" | awk '{print $2}')"; then
+    echo "ERROR: SSH key is NOT loaded into SSH-Agent."
+    exit 1
 fi
 
-# Verify: List all VMs in the resource group
-az vm list --resource-group $RESOURCE_GROUP --show-details --output table
-# Verify: List the public IP of the Bastion VM
-az network public-ip show \
-  --resource-group $RESOURCE_GROUP \
-  --name $BASTION_VM_PUBLIC_IP \
-  --query ipAddress -o tsv
+echo "✅ SSH key successfully loaded into SSH-Agent."
+echo "✅ SSH-Agent setup complete!"
+
+# **Test SSH connection to Web VM**
+echo "Testing SSH connection to Web VM ($WEB_VM_IP)..."
+if ssh -o "StrictHostKeyChecking=no" -o "ForwardAgent=yes" $VM_ADMIN_USER@$WEB_VM_IP "echo 'SSH to Web VM is working!'"; then
+    echo "✅ SSH connection to Web VM is working!"
+else
+    echo "❌ ERROR: SSH connection to Web VM failed!"
+    exit 1
+fi

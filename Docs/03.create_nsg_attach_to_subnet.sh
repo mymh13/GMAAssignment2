@@ -118,6 +118,18 @@ if ! rule_exists "$BASTION_VM_NSG" "AllowBastionSSH"; then
         --access Allow --direction Inbound --source-address-prefixes $(curl -s ifconfig.me)/32
 fi
 
+# Bastion VM NSG: Allow SSH from Web VM to Bastion
+if ! rule_exists "$BASTION_VM_NSG" "AllowInternalSSH"; then
+    az network nsg rule create \
+        --resource-group $RESOURCE_GROUP \
+        --nsg-name $BASTION_VM_NSG \
+        --name AllowInternalSSH \
+        --protocol Tcp \
+        --priority 150 \
+        --destination-port-ranges 22 \
+        --access Allow --direction Inbound --source-address-prefixes 10.0.1.0/24
+fi
+
 # Bastion VM NSG: Allow internal VNet communication
 if ! rule_exists "$BASTION_VM_NSG" "AllowVNetCommunication"; then
     az network nsg rule create \

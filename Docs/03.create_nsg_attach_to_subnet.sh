@@ -1,37 +1,18 @@
 #!/bin/bash
 
-# Set UTF-8 encoding for Python
-export PYTHONIOENCODING=UTF-8
-export LANG=en_US.UTF-8
-export LC_ALL=C.UTF-8
-
-# Define the env file path
-if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
-elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="$HOME/.config/OutdoorsyCloudyMvc/.env"
-elif [ -f "$HOME/AppData/Local/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="$HOME/AppData/Local/OutdoorsyCloudyMvc/.env"
-else
-    echo "No .env file found!"
-    exit 1
-fi
-
-# Load environment variables
-set -o allexport
-source "$ENV_FILE"
-set +o allexport
+# Load environment loader script
+source "$(dirname "$0")/42.load_env.sh"
 
 # Debugging: Print variables to confirm they are loaded
 echo "Loaded environment variables:"
 echo "WEB_NSG=$WEB_NSG"
 echo "DB_NSG=$DB_NSG"
-echo "BASTION_VM_NSG=$BASTION_VM_NSG"
+echo "BASTION_NSG=$BASTION_NSG"
 
 # Create NSGs if they don't exist
 az network nsg create --resource-group $RESOURCE_GROUP --name $WEB_NSG --location $LOCATION
 az network nsg create --resource-group $RESOURCE_GROUP --name $DB_NSG --location $LOCATION
-az network nsg create --resource-group $RESOURCE_GROUP --name $BASTION_VM_NSG --location $LOCATION
+az network nsg create --resource-group $RESOURCE_GROUP --name $BASTION_NSG --location $LOCATION
 
 # Attach NSGs to corresponding subnets
 az network vnet subnet update \
@@ -50,7 +31,7 @@ az network vnet subnet update \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name BastionVMSubnet \
-    --network-security-group $BASTION_VM_NSG
+    --network-security-group $BASTION_NSG
 
 # Function to check if an NSG rule exists
 rule_exists() {
@@ -107,10 +88,10 @@ if ! rule_exists "$DB_NSG" "AllowMongoDB"; then
 fi
 
 # Bastion VM NSG: Allow SSH access to the Bastion VM from your IP
-if ! rule_exists "$BASTION_VM_NSG" "AllowBastionSSH"; then
+if ! rule_exists "$BASTION_NSG" "AllowBastionSSH"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_VM_NSG \
+        --nsg-name $BASTION_NSG \
         --name AllowBastionSSH \
         --protocol Tcp \
         --priority 100 \
@@ -119,10 +100,10 @@ if ! rule_exists "$BASTION_VM_NSG" "AllowBastionSSH"; then
 fi
 
 # Bastion VM NSG: Allow SSH from Web VM to Bastion
-if ! rule_exists "$BASTION_VM_NSG" "AllowInternalSSH"; then
+if ! rule_exists "$BASTION_NSG" "AllowInternalSSH"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_VM_NSG \
+        --nsg-name $BASTION_NSG \
         --name AllowInternalSSH \
         --protocol Tcp \
         --priority 150 \
@@ -131,10 +112,10 @@ if ! rule_exists "$BASTION_VM_NSG" "AllowInternalSSH"; then
 fi
 
 # Bastion VM NSG: Allow internal VNet communication
-if ! rule_exists "$BASTION_VM_NSG" "AllowVNetCommunication"; then
+if ! rule_exists "$BASTION_NSG" "AllowVNetCommunication"; then
     az network nsg rule create \
         --resource-group $RESOURCE_GROUP \
-        --nsg-name $BASTION_VM_NSG \
+        --nsg-name $BASTION_NSG \
         --name AllowVNetCommunication \
         --protocol "*" \
         --priority 200 \
@@ -149,4 +130,4 @@ fi
 az network nsg list --resource-group $RESOURCE_GROUP --output table
 az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $WEB_NSG --output table
 az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $DB_NSG --output table
-az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $BASTION_VM_NSG --output table
+az network nsg rule list --resource-group $RESOURCE_GROUP --nsg-name $BASTION_NSG --output table

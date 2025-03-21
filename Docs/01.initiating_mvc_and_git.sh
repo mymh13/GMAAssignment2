@@ -1,20 +1,7 @@
 #!/bin/bash
 
-# Load .env variables
-if [ -f "/etc/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="/etc/OutdoorsyCloudyMvc/.env"
-elif [ -f "$HOME/.config/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="$HOME/.config/OutdoorsyCloudyMvc/.env"
-elif [ -f "$HOME/AppData/Local/OutdoorsyCloudyMvc/.env" ]; then
-    ENV_FILE="$HOME/AppData/Local/OutdoorsyCloudyMvc/.env"
-else
-    echo "No .env file found!"
-    exit 1
-fi
-
-set -o allexport
-source "$ENV_FILE"
-set +o allexport
+# Load environment loader script
+source "$(dirname "$0")/42.load_env.sh"
 
 # Skip script if project already exists! After initial deployment, we can start with script 02.
 if [ -d "$PROJECT_PATH" ]; then

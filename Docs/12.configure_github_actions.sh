@@ -42,11 +42,11 @@ jobs:
           dotnet build --no-restore OutdoorsyCloudyMvc.csproj
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
-      - name: Deploy to Web VM
+      - name: Deploy locally
         run: |
-          echo "Deploying to Web VM at: ${WEB_VM_IP}"
-          rsync -avz ./publish/ outdoorsyadmin@${WEB_VM_IP}:/var/www/outdoorsyapp/
-          ssh outdoorsyadmin@${WEB_VM_IP} "sudo systemctl restart outdoorsyapp"
+          mkdir -p /var/www/outdoorsyapp
+          cp -r ./publish/* /var/www/outdoorsyapp/
+          sudo systemctl restart kestrel-outdoorsyapp.service
 EOL
 
 echo "GitHub Actions workflow file created at $WORKFLOW_FILE"

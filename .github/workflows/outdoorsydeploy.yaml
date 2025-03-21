@@ -27,10 +27,10 @@ jobs:
           dotnet build --no-restore OutdoorsyCloudyMvc.csproj
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
-      - name: Deploy locally
+      - name: Deploy to DBVM
         run: |
-          sudo mkdir -p /var/www/outdoorsyapp
-          sudo cp -r ./publish/* /var/www/outdoorsyapp/
-          sudo chown -R www-data:www-data /var/www/outdoorsyapp
-          sudo chmod -R 755 /var/www/outdoorsyapp
-          sudo systemctl restart kestrel-outdoorsyapp.service
+          # Copy files to DBVM through Bastion
+          scp -o "ProxyCommand ssh -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
+          
+          # Restart the service on DBVM
+          ssh -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'

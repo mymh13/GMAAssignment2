@@ -27,8 +27,8 @@ jobs:
           dotnet build --no-restore OutdoorsyCloudyMvc.csproj
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
-      - name: Deploy to Web VM
+      - name: Deploy locally
         run: |
-          echo "Deploying to Web VM at: 4.223.81.235"
-          rsync -avz ./publish/ outdoorsyadmin@4.223.81.235:/var/www/outdoorsyapp/
-          ssh outdoorsyadmin@4.223.81.235 "sudo systemctl restart outdoorsyapp"
+          mkdir -p /var/www/outdoorsyapp
+          cp -r ./publish/* /var/www/outdoorsyapp/
+          sudo systemctl restart kestrel-outdoorsyapp.service

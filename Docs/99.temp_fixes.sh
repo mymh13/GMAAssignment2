@@ -12,14 +12,3 @@ source "$(dirname "$0")/42.load_env.sh"
 
 # temporary comment to trigger github actions, because I am pro like that
 # hello world
-
-az network nsg rule create \
-    --resource-group $RESOURCE_GROUP \
-    --nsg-name $DB_NSG \
-    --name AllowBastionSSH \
-    --protocol Tcp \
-    --priority 150 \
-    --destination-port-ranges 22 \
-    --access Allow \
-    --direction Inbound \
-    --source-address-prefixes 10.0.3.0/24

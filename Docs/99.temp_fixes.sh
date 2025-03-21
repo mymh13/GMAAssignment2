@@ -10,4 +10,3 @@ ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$WEB_VM_IP
 # Temporory code is run below,
 # Example:removing rules that are not needed, testing code, manual adjustments etc
 
-# curl -I http://$WEB_VM_IP

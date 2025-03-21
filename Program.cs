@@ -1,10 +1,23 @@
 using Microsoft.AspNetCore.HttpOverrides;
+using MongoDB.Driver;
+using OutdoorsyCloudyMvc.Configurations;
+using OutdoorsyCloudyMvc.Models;
+using OutdoorsyCloudyMvc.Repositories;
+using OutdoorsyCloudyMvc.Services;
+using OutdoorsyCloudyMvc.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load env from file
-var envFilePath = "/etc/OutdoorsyCloudyMvc/.env";
-if (File.Exists(envFilePath))
+// --- Load environment variables from .env file ---
+var envFilePaths = new[]
+{
+    "/etc/OutdoorsyCloudyMvc/.env",
+    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config/OutdoorsyCloudyMvc/.env"),
+    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OutdoorsyCloudyMvc/.env")
+};
+
+var envFilePath = envFilePaths.FirstOrDefault(File.Exists);
+if (envFilePath != null)
 {
     var lines = File.ReadAllLines(envFilePath);
     foreach (var line in lines)
@@ -15,51 +28,97 @@ if (File.Exists(envFilePath))
             Environment.SetEnvironmentVariable(parts[0], parts[1]);
         }
     }
+    Console.WriteLine($"Environment variables loaded from {envFilePath}");
+}
+else
+{
+    Console.WriteLine("Warning: No .env file found in any of the expected locations.");
 }
 
-// Add services to the container.
+// --- Add services to the container ---
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
 
-// Configure Kestrel to not add a server header
-builder.WebHost.UseKestrel(opts =>
+// --- Configure Azure Blob Storage ---
+var blobConnectionString = Environment.GetEnvironmentVariable("BLOB_CONNECTION_STRING") ?? "";
+var containerName = Environment.GetEnvironmentVariable("BLOB_CONTAINER_NAME") ?? "";
+
+// Extract the blob endpoint from the connection string
+var blobEndpoint = "";
+if (!string.IsNullOrEmpty(blobConnectionString))
 {
-    opts.AddServerHeader = false;
+    var parts = blobConnectionString.Split(';');
+    foreach (var part in parts)
+    {
+        if (part.StartsWith("BlobEndpoint="))
+        {
+            blobEndpoint = part.Substring("BlobEndpoint=".Length).TrimEnd('/');
+            break;
+        }
+    }
+}
+
+builder.Configuration[AzureBlobOptions.SectionName + ":BaseUrl"] = blobEndpoint;
+builder.Configuration[AzureBlobOptions.SectionName + ":ContainerName"] = containerName;
+
+builder.Services.Configure<AzureBlobOptions>(
+    builder.Configuration.GetSection(AzureBlobOptions.SectionName));
+
+builder.Services.AddSingleton<IImageService, OutdoorsyCloudyMvc.Storage.AzureBlobImageService>();
+
+// --- Configure MongoDB from ENV variables ---
+var mongoOptions = new MongoDbOptions
+{
+    ConnectionString = Environment.GetEnvironmentVariable("MONGO_CONNECTION_STRING") ?? "",
+    DatabaseName = Environment.GetEnvironmentVariable("MONGO_DATABASE_NAME") ?? "",
+    CollectionName = Environment.GetEnvironmentVariable("MONGO_COLLECTION_NAME") ?? ""
+};
+
+builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoOptions.ConnectionString));
+builder.Services.AddSingleton<IMongoCollection<Review>>(sp =>
+{
+    var client = sp.GetRequiredService<IMongoClient>();
+    var db = client.GetDatabase(mongoOptions.DatabaseName);
+    return db.GetCollection<Review>(mongoOptions.CollectionName);
 });
+
+builder.Services.AddSingleton<IReviewRepository, MongoDbReviewRepository>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+
+// --- Kestrel / Security hardening ---
+builder.WebHost.UseKestrel(opts => opts.AddServerHeader = false);
 builder.WebHost.UseSetting("AllowedHosts", "*");
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
-// Configure forwarded headers, this is because Kestrel runs behind an Nginx proxy
+// --- Configure forwarded headers ---
 var bastionIp = Environment.GetEnvironmentVariable("BASTION_VM_PRIVATE_IP") ?? "127.0.0.1";
-var forwardOptions = new ForwardedHeadersOptions
+var forwardedHeaders = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 };
-forwardOptions.KnownNetworks.Clear(); // Clear the default networks
-forwardOptions.KnownProxies.Clear();  // Clear the default proxies
-forwardOptions.KnownProxies.Add(System.Net.IPAddress.Parse(bastionIp)); // BastionVM private IP
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+forwardedHeaders.KnownProxies.Add(System.Net.IPAddress.Parse(bastionIp));
+app.UseForwardedHeaders(forwardedHeaders);
 
-app.UseForwardedHeaders(forwardOptions);
-
+// --- HTTP pipeline ---
 app.UseHttpsRedirection();
-app.UseRouting();
-
-app.UseAuthorization();
-
 app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-// Run the app on port 5000, Kestrel is only listening locally so not accessible by Nginx
-app.Run("http://0.0.0.0:5000");
+// --- Start Kestrel on internal port 5000 --- TODO: this was here during development, come back and clean up
+// app.Run("http://0.0.0.0:5000");
+app.Run();

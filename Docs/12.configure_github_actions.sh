@@ -44,7 +44,9 @@ jobs:
 
       - name: Deploy locally
         run: |
-          mkdir -p /var/www/outdoorsyapp
+          sudo mkdir -p /var/www/outdoorsyapp
+          sudo chown -R $USER:$USER /var/www/outdoorsyapp
+          sudo chmod -R 755 /var/www/outdoorsyapp
           cp -r ./publish/* /var/www/outdoorsyapp/
           sudo systemctl restart kestrel-outdoorsyapp.service
 EOL

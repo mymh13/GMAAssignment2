@@ -24,10 +24,12 @@ jobs:
 
       - name: Build and publish the app
         run: |
-          dotnet build --no-restore
-          dotnet publish -c Release -o ./publish
+          dotnet build --no-restore OutdoorsyCloudyMvc.csproj
+          dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
       - name: Deploy to Web VM
+        uses: actions/upload-artifact@v4
         run: |
-          rsync -avz ./publish/ outdoorsyadmin@$WEB_VM_IP:/var/www/outdoorsyapp/
-          ssh outdoorsyadmin@$WEB_VM_IP "sudo systemctl restart outdoorsyapp"
+          echo "Deploying to Web VM at: 4.223.81.235"
+          rsync -avz ./publish/ outdoorsyadmin@4.223.81.235:/var/www/outdoorsyapp/
+          ssh outdoorsyadmin@4.223.81.235 "sudo systemctl restart outdoorsyapp"

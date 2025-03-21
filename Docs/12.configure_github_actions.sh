@@ -12,7 +12,7 @@ echo "Creating GitHub Actions workflow at $WORKFLOW_FILE..."
 mkdir -p "$WORKFLOW_DIR"
 
 # Write the workflow
-cat <<EOF > "$WORKFLOW_FILE"
+cat > "$WORKFLOW_FILE" <<EOL
 name: Outdoorsy .NET Deployment
 
 on:
@@ -23,7 +23,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Install .NET SDK
@@ -39,14 +39,15 @@ jobs:
 
       - name: Build and publish the app
         run: |
-          dotnet build --no-restore
-          dotnet publish -c Release -o ./publish
+          dotnet build --no-restore OutdoorsyCloudyMvc.csproj
+          dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
-      - name: Upload app artifacts to GitHub
+      - name: Deploy to Web VM
         uses: actions/upload-artifact@v4
-        with:
-          name: app-artifacts
-          path: ./publish
-EOF
+        run: |
+          echo "Deploying to Web VM at: ${WEB_VM_IP}"
+          rsync -avz ./publish/ outdoorsyadmin@${WEB_VM_IP}:/var/www/outdoorsyapp/
+          ssh outdoorsyadmin@${WEB_VM_IP} "sudo systemctl restart outdoorsyapp"
+EOL
 
 echo "GitHub Actions workflow file created at $WORKFLOW_FILE"

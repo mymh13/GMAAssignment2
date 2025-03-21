@@ -13,18 +13,18 @@ ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$WEB_VM_IP << 'EOF'
     echo "Overwriting NGINX config with reverse proxy settings..."
     sudo bash -c 'cat > /etc/nginx/sites-available/default' << 'NGINXCONF'
 server {
-    listen 80;
-    server_name _;
+    listen 80 default_server;
+    listen [::]:80 default_server;
 
     location / {
-        proxy_pass http://localhost:5000;
+        proxy_pass         http://127.0.0.1:5000/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection keep-alive;
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection keep-alive;
+        proxy_set_header   Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
     }
 }
 NGINXCONF

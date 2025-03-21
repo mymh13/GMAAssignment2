@@ -28,7 +28,6 @@ jobs:
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
       - name: Deploy to Web VM
-        uses: actions/upload-artifact@v4
         run: |
           echo "Deploying to Web VM at: 4.223.81.235"
           rsync -avz ./publish/ outdoorsyadmin@4.223.81.235:/var/www/outdoorsyapp/

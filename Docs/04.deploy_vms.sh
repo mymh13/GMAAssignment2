@@ -140,3 +140,39 @@ az network public-ip show \
   --resource-group $RESOURCE_GROUP \
   --name $BASTION_VM_PUBLIC_IP \
   --query ipAddress -o tsv
+
+# CRITICAL: DO NOT TOUCH THE CODE BELOW THIS LINE
+# This code updates the ~/.ssh/config file with the latest VM IPs, it is vital since we are updating IPs
+
+# Update ~/.ssh/config based on new IPs
+SSH_CONFIG_PATH="$HOME/.ssh/config"
+
+# Remove old entries
+sed -i '/^Host bastion/,/^$/d' "$SSH_CONFIG_PATH"
+sed -i '/^Host web/,/^$/d' "$SSH_CONFIG_PATH"
+sed -i '/^Host dbvm-via-bastion/,/^$/d' "$SSH_CONFIG_PATH"
+
+# Append updated entries
+cat <<EOF >> "$SSH_CONFIG_PATH"
+
+Host bastion
+    HostName $BASTION_IP
+    User $VM_ADMIN_USER
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes
+
+Host web
+    HostName $WEB_VM_IP
+    User $VM_ADMIN_USER
+    ProxyJump bastion
+    IdentityFile ~/.ssh/id_ed25519
+    ForwardAgent yes
+
+Host dbvm-via-bastion
+    HostName $DB_VM_PRIVATE_IP
+    User $VM_ADMIN_USER
+    ProxyJump bastion
+    IdentityFile ~/.ssh/id_ed25519
+EOF
+
+echo "SSH config updated with latest VM IPs."

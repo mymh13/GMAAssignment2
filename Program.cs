@@ -20,6 +20,13 @@ if (File.Exists(envFilePath))
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
+// Configure Kestrel to not add a server header
+builder.WebHost.UseKestrel(opts =>
+{
+    opts.AddServerHeader = false;
+});
+builder.WebHost.UseSetting("AllowedHosts", "*");
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

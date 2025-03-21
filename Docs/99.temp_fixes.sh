@@ -11,3 +11,4 @@ ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$WEB_VM_IP
 # Example:removing rules that are not needed, testing code, manual adjustments etc
 
 # temporary comment to trigger github actions, because I am pro like that
+# hello world

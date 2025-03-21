@@ -45,8 +45,6 @@ jobs:
       - name: Deploy locally
         run: |
           sudo mkdir -p /var/www/outdoorsyapp
-          sudo chmod -R 775 /var/www/outdoorsyapp
-          sudo chown -R $(whoami):$(whoami) /var/www/outdoorsyapp
           sudo cp -r ./publish/* /var/www/outdoorsyapp/
           sudo chown -R www-data:www-data /var/www/outdoorsyapp
           sudo chmod -R 755 /var/www/outdoorsyapp

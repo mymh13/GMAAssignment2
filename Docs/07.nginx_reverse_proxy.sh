@@ -5,7 +5,7 @@ source "$(dirname "$0")/42.load_env.sh"
 
 echo "🔧 Configuring NGINX reverse proxy on Web VM ($WEB_VM_IP)..."
 
-# SSH into the Web VM and configure NGINX for reverse proxy
+# SSH into the Web VM and configure NGINX
 ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$WEB_VM_IP << 'EOF'
     echo "Backing up existing default config..."
     sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.bak
@@ -23,6 +23,8 @@ server {
         proxy_set_header Connection keep-alive;
         proxy_set_header Host \$host;
         proxy_cache_bypass \$http_upgrade;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 NGINXCONF

@@ -119,6 +119,5 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-// --- Start Kestrel on internal port 5000 --- TODO: this was here during development, come back and clean up
-// app.Run("http://0.0.0.0:5000");
-app.Run();
+// --- Start Kestrel on internal port 5000 ---
+app.Run("http://0.0.0.0:5000");

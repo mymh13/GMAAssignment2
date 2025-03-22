@@ -24,13 +24,13 @@ on:
 jobs:
   build:
     runs-on: self-hosted
-    env:
-      DOTNET_ROOT: /home/outdoorsyadmin/.dotnet
-      PATH: ${{ env.PATH }}:/home/outdoorsyadmin/.dotnet
 
     steps:
       - name: Setup .NET
         run: |
+          echo "export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
+          echo "export PATH=$PATH:/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
+          source $GITHUB_ENV
           dotnet --info
 
       - name: Check out this repo
@@ -38,6 +38,7 @@ jobs:
 
       - name: Restore dependencies
         run: |
+          source $GITHUB_ENV
           dotnet restore
 
       - name: Build with memory limits

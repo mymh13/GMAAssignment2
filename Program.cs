@@ -116,8 +116,9 @@ app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
+    // pattern: "{controller=Home}/{action=Index}/{id?}")
+    // .WithStaticAssets();
+    pattern: "{controller=Home}/{action=Index}/{id?}");
 
 // --- Start Kestrel on internal port 5000 ---
 app.Run("http://0.0.0.0:5000");

@@ -11,16 +11,22 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+      - name: Setup .NET
+        run: |
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=$PATH:$DOTNET_ROOT
+          dotnet --info
 
       - name: Check out this repo
         uses: actions/checkout@v4
 
       - name: Restore dependencies (install NuGet packages)
         run: dotnet restore
+
+      - name: Build with memory limits
+        run: |
+          export DOTNET_CLI_TELEMETRY_OPTOUT=1
+          dotnet build --no-restore --configuration Release /p:UseSharedCompilation=false
 
       - name: Build and publish the app
         run: |
@@ -34,3 +40,12 @@ jobs:
           
           # Restart the service on DBVM
           ssh -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo systemctl restart waagent
+          sudo apt-get clean
+          sudo rm -rf /tmp/*
+          # Clear any lingering .NET processes
+          pkill -f dotnet || true

@@ -26,10 +26,11 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+      - name: Setup .NET
+        run: |
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=$PATH:$DOTNET_ROOT
+          dotnet --info
 
       - name: Check out this repo
         uses: actions/checkout@v4
@@ -37,18 +38,32 @@ jobs:
       - name: Restore dependencies (install NuGet packages)
         run: dotnet restore
 
+      - name: Build with memory limits
+        run: |
+          export DOTNET_CLI_TELEMETRY_OPTOUT=1
+          dotnet build --no-restore --configuration Release /p:UseSharedCompilation=false
+
       - name: Build and publish the app
         run: |
           dotnet build --no-restore OutdoorsyCloudyMvc.csproj
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 
-      - name: Deploy locally
+      - name: Deploy to DBVM
         run: |
-          sudo mkdir -p /var/www/outdoorsyapp
-          sudo cp -r ./publish/* /var/www/outdoorsyapp/
-          sudo chown -R www-data:www-data /var/www/outdoorsyapp
-          sudo chmod -R 755 /var/www/outdoorsyapp
-          sudo systemctl restart kestrel-outdoorsyapp.service
+          # Copy files to DBVM through Bastion
+          scp -o "ProxyCommand ssh -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
+          
+          # Restart the service on DBVM
+          ssh -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo systemctl restart waagent
+          sudo apt-get clean
+          sudo rm -rf /tmp/*
+          # Clear any lingering .NET processes
+          pkill -f dotnet || true
 EOL
 
 echo "GitHub Actions workflow file created at $WORKFLOW_FILE"

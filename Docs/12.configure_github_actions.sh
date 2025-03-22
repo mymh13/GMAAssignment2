@@ -28,9 +28,8 @@ jobs:
     steps:
       - name: Setup .NET
         run: |
-          echo "export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
-          echo "export PATH=$PATH:/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
-          source $GITHUB_ENV
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           dotnet --info
 
       - name: Check out this repo
@@ -38,16 +37,21 @@ jobs:
 
       - name: Restore dependencies
         run: |
-          source $GITHUB_ENV
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           dotnet restore
 
       - name: Build with memory limits
         run: |
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           export DOTNET_CLI_TELEMETRY_OPTOUT=1
           dotnet build --no-restore --configuration Release /p:UseSharedCompilation=false
 
       - name: Build and publish the app
         run: |
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           dotnet build --no-restore OutdoorsyCloudyMvc.csproj
           dotnet publish -c Release -o ./publish OutdoorsyCloudyMvc.csproj
 

@@ -46,11 +46,11 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H 4.223.83.148 >> ~/.ssh/known_hosts
           
-          # Copy files to DBVM through Bastion
-          scp -o "ProxyCommand ssh -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
+          # Copy files to DBVM through Bastion using the existing SSH key
+          scp -i ~/.ssh/id_ed25519 -o "ProxyCommand ssh -i ~/.ssh/id_ed25519 -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
           
-          # Restart the service on DBVM
-          ssh -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
+          # Restart the service on DBVM using the existing SSH key
+          ssh -i ~/.ssh/id_ed25519 -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
 
       - name: Cleanup
         if: always()

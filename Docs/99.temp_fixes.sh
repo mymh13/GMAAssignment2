@@ -11,4 +11,4 @@ source "$(dirname "$0")/42.load_env.sh"
 # Example:removing rules that are not needed, testing code, manual adjustments etc
 
 # temporary comment to trigger github actions, because I am pro like that
-# hello world
+# hello worldsy

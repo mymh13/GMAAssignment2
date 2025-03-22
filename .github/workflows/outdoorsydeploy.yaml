@@ -13,9 +13,8 @@ jobs:
     steps:
       - name: Setup .NET
         run: |
-          echo "export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
-          echo "export PATH=$PATH:/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
-          source $GITHUB_ENV
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           dotnet --info
 
       - name: Check out this repo
@@ -23,7 +22,8 @@ jobs:
 
       - name: Restore dependencies
         run: |
-          source $GITHUB_ENV
+          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
+          export PATH=/home/outdoorsyadmin/.dotnet:$PATH
           dotnet restore
 
       - name: Build with memory limits

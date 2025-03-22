@@ -28,15 +28,18 @@ jobs:
     steps:
       - name: Setup .NET
         run: |
-          export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet
-          export PATH=$PATH:$DOTNET_ROOT
+          echo "export DOTNET_ROOT=/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
+          echo "export PATH=$PATH:/home/outdoorsyadmin/.dotnet" >> $GITHUB_ENV
+          source $GITHUB_ENV
           dotnet --info
 
       - name: Check out this repo
         uses: actions/checkout@v4
 
-      - name: Restore dependencies (install NuGet packages)
-        run: dotnet restore
+      - name: Restore dependencies
+        run: |
+          source $GITHUB_ENV
+          dotnet restore
 
       - name: Build with memory limits
         run: |
@@ -59,10 +62,9 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          sudo systemctl restart waagent
+          sudo systemctl restart walinuxagent || true
           sudo apt-get clean
           sudo rm -rf /tmp/*
-          # Clear any lingering .NET processes
           pkill -f dotnet || true
 EOL
 

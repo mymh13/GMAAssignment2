@@ -57,11 +57,19 @@ jobs:
 
       - name: Deploy to DBVM
         run: |
+          # Add Bastion to known hosts with strict host key checking disabled
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 4.223.83.148 >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          
+          # Test SSH connection to Bastion first
+          ssh -o StrictHostKeyChecking=no outdoorsyadmin@4.223.83.148 'echo "Bastion connection successful"'
+          
           # Copy files to DBVM through Bastion
-          scp -o "ProxyCommand ssh -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
+          scp -o StrictHostKeyChecking=no -o "ProxyCommand ssh -A outdoorsyadmin@4.223.83.148 nc %h %p" -r ./publish/* outdoorsyadmin@10.0.2.4:/etc/OutdoorsyCloudyMvc/app/
           
           # Restart the service on DBVM
-          ssh -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
+          ssh -o StrictHostKeyChecking=no -A -J outdoorsyadmin@4.223.83.148 outdoorsyadmin@10.0.2.4 'sudo systemctl restart outdoorsycloudy.service'
 
       - name: Cleanup
         if: always()

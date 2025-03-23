@@ -31,4 +31,10 @@ public class Review
 
     [BsonElement("approved")]
     public bool IsApproved { get; set; } = true; // Optional, for moderation
+
+    /// <summary>
+    /// Future enhancement: Will store Azure Blob Storage image reference
+    /// Currently disabled pending authentication implementation
+    /// </summary>
+    //public string? ImageUrl { get; set; }
 }

@@ -3,48 +3,31 @@
 # Load environment loader script
 source "$(dirname "$0")/42.load_env.sh"
 
-# Ensure a Public IP exists for the Web VM
-az network public-ip create --resource-group $RESOURCE_GROUP --name $WEB_VM_PUBLIC_IP --sku Standard --allocation-method Static
+echo "Deploying Virtual Machines..."
 
-# Deploy the Web VM
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $WEB_VM_NAME \
-  --image $VM_IMAGE \
-  --admin-username $VM_ADMIN_USER \
-  --size $VM_SIZE \
-  --authentication-type ssh \
-  --ssh-key-values $SSH_KEY_PATH \
-  --vnet-name $VNET_NAME \
-  --subnet $WEB_SUBNET \
-  --public-ip-address $WEB_VM_PUBLIC_IP \
-  --nsg $WEB_NSG \
-  --output table
+# Create Public IPs
+echo "Creating Public IPs..."
 
-# Deploy the DB VM
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $DB_VM_NAME \
-  --image $VM_IMAGE \
-  --admin-username $VM_ADMIN_USER \
-  --size $VM_SIZE \
-  --authentication-type ssh \
-  --ssh-key-values $SSH_KEY_PATH \
-  --vnet-name $VNET_NAME \
-  --subnet $DB_SUBNET \
-  --public-ip-address "" \
-  --nsg $DB_NSG \
-  --no-wait \
-  --output table
-
-# Ensure a Public IP exists for the Bastion VM
+# Create Public IP for Bastion VM (this is our jump host)
+echo "Creating Bastion VM Public IP..."
 az network public-ip create \
   --resource-group $RESOURCE_GROUP \
   --name $BASTION_VM_PUBLIC_IP \
   --sku Standard \
-  --allocation-method Static
+  --allocation-method Static \
+  --tags Environment=Production Application=OutdoorsyCloudy
 
-# Deploy the Bastion VM (acting as a jump host)
+# Create Public IP for Web VM
+echo "Creating Web VM Public IP..."
+az network public-ip create \
+  --resource-group $RESOURCE_GROUP \
+  --name $WEB_VM_PUBLIC_IP \
+  --sku Standard \
+  --allocation-method Static \
+  --tags Environment=Production Application=OutdoorsyCloudy
+
+# Deploy the Bastion VM first (our jump host)
+echo "Deploying Bastion VM..."
 az vm create \
   --resource-group $RESOURCE_GROUP \
   --name $BASTION_VM_NAME \
@@ -57,94 +40,89 @@ az vm create \
   --subnet $BASTION_VM_SUBNET \
   --public-ip-address $BASTION_VM_PUBLIC_IP \
   --nsg $BASTION_NSG \
+  --tags Environment=Production Application=OutdoorsyCloudy Role=JumpHost \
   --output table
 
-# Fetch the Web VM's Public IP - using a different approach
-echo "Fetching Web VM IP address..."
-WEB_VM_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $WEB_VM_PUBLIC_IP --query ipAddress -o tsv)
-echo "Web VM IP Found: $WEB_VM_IP"
-
-# Only try to fetch Bastion IP if BASTION_PUBLIC_IP is defined
-if [ -n "$BASTION_VM_PUBLIC_IP" ]; then
-    echo "Fetching Bastion IP address..."
-    # Check if the Bastion public IP resource exists
-    if az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP &>/dev/null; then
-        BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP --query ipAddress -o tsv)
-        echo "Bastion IP Found: $BASTION_IP"
-    else
-        echo "Bastion public IP resource not found. It will be created in script 05."
-        BASTION_IP=""
-    fi
-else
-    echo "Skipping Bastion IP lookup as BASTION_PUBLIC_IP is not defined"
-    BASTION_IP=""
-fi
-
-# Store the IPs in the .env file for reuse
-if [ -n "$WEB_VM_IP" ]; then
-    # Check if WEB_VM_IP already exists in the .env file
-    if grep -q "^WEB_VM_IP=" "$ENV_FILE"; then
-        # Replace the existing line
-        sed -i "/^WEB_VM_IP=/c\WEB_VM_IP=$WEB_VM_IP" "$ENV_FILE"
-    else
-        # Add a new line
-        echo "WEB_VM_IP=$WEB_VM_IP" >> "$ENV_FILE"
-    fi
-    echo "Stored Web VM IP: $WEB_VM_IP"
-else
-    echo "ERROR: Web VM IP not found!"
-fi
-
-# Only try to store Bastion IP if we attempted to fetch it and found it
-if [ -n "$BASTION_VM_PUBLIC_IP" ]; then
-    echo "Fetching Bastion IP address..."
-    BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP --query ipAddress -o tsv)
-
-    if [ -n "$BASTION_IP" ]; then
-        echo "Bastion IP Found: $BASTION_IP"
-        sed -i "/^BASTION_IP=/c\BASTION_IP=$BASTION_IP" "$ENV_FILE"
-    else
-        echo "ERROR: Bastion IP not found!"
-    fi
-else
-    echo "Skipping Bastion IP update since it is undefined"
-fi
-
-echo "Deploying SSH keys to VMs..."
-
-# Copy the SSH key to the Web VM (Corrected pathing)
-scp -i ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.pub $VM_ADMIN_USER@$WEB_VM_IP:/home/$VM_ADMIN_USER/.ssh/
-
-# Set up SSH access on Web VM (Fixed pathing issue)
-ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$WEB_VM_IP << EOF
-    cat /home/$VM_ADMIN_USER/.ssh/id_ed25519.pub >> /home/$VM_ADMIN_USER/.ssh/authorized_keys
-    chmod 600 /home/$VM_ADMIN_USER/.ssh/authorized_keys
-EOF
-
-# Copy the SSH key to the Bastion VM
-scp -i ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.pub $VM_ADMIN_USER@$BASTION_IP:/home/$VM_ADMIN_USER/.ssh/
-
-# Set up SSH access on Bastion VM (Fixed pathing issue)
-ssh -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$BASTION_IP << EOF
-    chmod 700 /home/$VM_ADMIN_USER/.ssh/
-    chmod 600 /home/$VM_ADMIN_USER/.ssh/authorized_keys
-    cat /home/$VM_ADMIN_USER/.ssh/id_ed25519.pub >> /home/$VM_ADMIN_USER/.ssh/authorized_keys
-EOF
-
-echo "SSH keys deployed and configured."
-
-# Verify: List all VMs in the resource group
-az vm list --resource-group $RESOURCE_GROUP --show-details --output table
-# Verify: List the public IP of the Bastion VM
-az network public-ip show \
+# Deploy the Web VM
+echo "Deploying Web VM..."
+az vm create \
   --resource-group $RESOURCE_GROUP \
-  --name $BASTION_VM_PUBLIC_IP \
-  --query ipAddress -o tsv
+  --name $WEB_VM_NAME \
+  --image $VM_IMAGE \
+  --admin-username $VM_ADMIN_USER \
+  --size $VM_SIZE \
+  --authentication-type ssh \
+  --ssh-key-values $SSH_KEY_PATH \
+  --vnet-name $VNET_NAME \
+  --subnet $WEB_SUBNET \
+  --public-ip-address $WEB_VM_PUBLIC_IP \
+  --nsg $WEB_NSG \
+  --tags Environment=Production Application=OutdoorsyCloudy Role=WebServer \
+  --output table
 
-# CRITICAL: DO NOT TOUCH THE CODE BELOW THIS LINE
-# This code updates the ~/.ssh/config file with the latest VM IPs, it is vital since we are updating IPs
+# Deploy the DB VM (without public IP)
+echo "Deploying DB VM..."
+az vm create \
+  --resource-group $RESOURCE_GROUP \
+  --name $DB_VM_NAME \
+  --image $VM_IMAGE \
+  --admin-username $VM_ADMIN_USER \
+  --size $VM_SIZE \
+  --authentication-type ssh \
+  --ssh-key-values $SSH_KEY_PATH \
+  --vnet-name $VNET_NAME \
+  --subnet $DB_SUBNET \
+  --public-ip-address "" \
+  --nsg $DB_NSG \
+  --tags Environment=Production Application=OutdoorsyCloudy Role=DatabaseServer \
+  --no-wait \
+  --output table
 
-# Update ~/.ssh/config based on new IPs
+# Fetch and store IP addresses
+echo "Fetching IP addresses..."
+
+# Get Bastion VM IP
+echo "Fetching Bastion VM IP..."
+BASTION_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $BASTION_VM_PUBLIC_IP --query ipAddress -o tsv)
+if [ -n "$BASTION_IP" ]; then
+    echo "Bastion IP Found: $BASTION_IP"
+    sed -i "/^BASTION_IP=/c\BASTION_IP=$BASTION_IP" "$ENV_FILE"
+else
+    echo "ERROR: Failed to get Bastion IP!"
+    exit 1
+fi
+
+# Get Web VM IP
+echo "Fetching Web VM IP..."
+WEB_VM_IP=$(az network public-ip show --resource-group $RESOURCE_GROUP --name $WEB_VM_PUBLIC_IP --query ipAddress -o tsv)
+if [ -n "$WEB_VM_IP" ]; then
+    echo "Web VM IP Found: $WEB_VM_IP"
+    sed -i "/^WEB_VM_IP=/c\WEB_VM_IP=$WEB_VM_IP" "$ENV_FILE"
+else
+    echo "ERROR: Failed to get Web VM IP!"
+    exit 1
+fi
+
+echo "Setting up SSH configuration..."
+
+# Wait for Bastion VM to be ready
+echo "Waiting for Bastion VM to be ready..."
+sleep 30
+
+# Set up SSH access on Bastion VM
+echo "Configuring Bastion VM SSH..."
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 $VM_ADMIN_USER@$BASTION_IP << EOF
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+    touch ~/.ssh/authorized_keys
+    chmod 600 ~/.ssh/authorized_keys
+    cat >> ~/.ssh/authorized_keys << 'INNEREOF'
+$(cat ~/.ssh/id_ed25519.pub)
+INNEREOF
+EOF
+
+# Update SSH config
+echo "Updating SSH config..."
 SSH_CONFIG_PATH="$HOME/.ssh/config"
 
 # Remove old entries
@@ -176,3 +154,23 @@ Host dbvm-via-bastion
 EOF
 
 echo "SSH config updated with latest VM IPs."
+
+# Verify deployment
+echo -e "\nDeployment Status:"
+echo "Listing all VMs..."
+az vm list \
+    --resource-group $RESOURCE_GROUP \
+    --show-details \
+    --output table
+
+echo -e "\nVerifying SSH connectivity..."
+echo "Testing Bastion connection..."
+ssh -o ConnectTimeout=5 bastion "echo 'Bastion VM connection successful'" || echo "Failed to connect to Bastion VM"
+
+echo "Testing Web VM connection through Bastion..."
+ssh -o ConnectTimeout=5 web "echo 'Web VM connection successful'" || echo "Failed to connect to Web VM"
+
+echo "Testing DB VM connection through Bastion..."
+ssh -o ConnectTimeout=5 dbvm-via-bastion "echo 'DB VM connection successful'" || echo "Failed to connect to DB VM"
+
+echo "VM deployment and configuration completed!"
